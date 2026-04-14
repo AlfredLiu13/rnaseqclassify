@@ -23,10 +23,10 @@ class Node:
 class DecisionTree:
     """Decision Tree for classification and regression."""
     def __init__(self, purityMeasure=None, maxDepth = None, minSamplesSplit = None, minSamplesLeaf=None):
-        self.purityMeasure = purityMeasure
-        self.maxDepth = maxDepth
-        self.minSamplesSplit = minSamplesSplit
-        self.minSamplesLeaf = minSamplesLeaf
+        self.purityMeasure = purityMeasure      #Purity measure (gini or entropy) to compute infogain with
+        self.maxDepth = maxDepth                #Max depth tree can grow to (None = unlimited)
+        self.minSamplesSplit = minSamplesSplit  #Minimum samples required to split a node
+        self.minSamplesLeaf = minSamplesLeaf    #Minimum samples required at a leaf node
         self.tree = None
         self.numFeatures = None
         self.classes = None
@@ -142,6 +142,8 @@ class DecisionTree:
 
     def _createLeaf(self, y):
         """Create a leaf node."""
+
+        #Pick most common class via majority vote
         value = Counter(y).most_common(1)[0][0]
         return Node(value=value, samples=len(y), impurity=0)
     
