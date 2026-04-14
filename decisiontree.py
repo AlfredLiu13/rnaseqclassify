@@ -1,4 +1,6 @@
 import numpy as np
+import pickle
+import os
 from collections import Counter
 
 #The following decision tree implementation allows for splitting based on entropy or gini index
@@ -12,7 +14,7 @@ class Node:
         self.right = right              #Right subtree
         self.cellType =  cellType       #(Leaves only): Cell type prediction  
         self.numSamples = numSamples    #Number of samples at this node
-        self.impurity = impurity            #Purity measure based on the feature being split on
+        self.impurity = impurity        #Purity measure based on the feature being split on
     
     def isLeaf(self):
         """Check if node is a leaf."""
@@ -216,3 +218,49 @@ def gini(labels):
         gini -= labelProb**2
 
     return gini
+
+def trainAndTestTree(XTrain, XTest, yTrain, yTest, purityMeasure='entropy', 
+                        maxDepth=10, minSamplesSplit=5, minSamplesLeaf=2, 
+                        outputPath='trainedTree.pkl'):
+    """Train a decision tree classifier and save it to disk."""
+    
+    print("Training Decision Tree...")
+    #Create tree with paramters
+    tree = DecisionTree(
+        purityMeasure=purityMeasure,
+        maxDepth=maxDepth,
+        minSamplesSplit=minSamplesSplit,
+        minSamplesLeaf=minSamplesLeaf
+    )
+    
+    #Train tree
+    tree.fit(XTrain, yTrain)
+    
+    #Evaluate tree accuracy using training and testing data
+    trainAccuracy = tree.score(XTrain, yTrain)
+    print(f"Training Accuracy: {trainAccuracy}")
+    
+    testAccuracy = tree.score(XTest, yTest)
+    print(f"Testing Accuracy: {testAccuracy}")
+    
+    #Save tree via pickle
+    with open(outputPath, 'wb') as f:
+        pickle.dump(tree, f)
+    
+    print(f"Tree saved to {outputPath}")
+    
+    return tree
+ 
+ 
+def loadTree(inputFilePath):
+    """Load a previously trained decision tree in pickle format"""
+    
+    with open(inputFilePath, 'rb') as f:
+        tree = pickle.load(f)
+    
+    print(f"Tree loaded from {inputFilePath}")
+    return tree
+ 
+ 
+if __name__ == "__main__":
+    pass
