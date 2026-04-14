@@ -1,7 +1,9 @@
 import numpy as np
 import pickle
 import os
+import time
 from collections import Counter
+from multiprocessing import Pool, cpu_count
 
 #The following decision tree implementation allows for splitting based on entropy or gini index
 
@@ -24,11 +26,12 @@ class Node:
 
 class DecisionTree:
     """Decision Tree for classification and regression."""
-    def __init__(self, purityMeasure=None, maxDepth = None, minSamplesSplit = None, minSamplesLeaf=None):
-        self.purityMeasure = purityMeasure      #Purity measure (gini or entropy) to compute infogain with
-        self.maxDepth = maxDepth                #Max depth tree can grow to (None = unlimited)
-        self.minSamplesSplit = minSamplesSplit  #Minimum samples required to split a node
-        self.minSamplesLeaf = minSamplesLeaf    #Minimum samples required at a leaf node
+    def __init__(self, purityMeasure=None, maxDepth = None, minSamplesSplit = None, minSamplesLeaf=None, numJobs=-1):
+        self.purityMeasure = purityMeasure                      #Purity measure (gini or entropy) to compute infogain with
+        self.maxDepth = maxDepth                                #Max depth tree can grow to (None = unlimited)
+        self.minSamplesSplit = minSamplesSplit                  #Minimum samples required to split a node
+        self.minSamplesLeaf = minSamplesLeaf                    #Minimum samples required at a leaf node
+        self.numJobs = numJobs if numJobs > 0 else cpu_count()  #Number of cpus to use
         self.tree = None
         self.numFeatures = None
         self.classes = None
@@ -72,44 +75,66 @@ class DecisionTree:
     def _findBestSplit(self, X, y):
         """Find the best feature and threshold to split a node"""
         numSamples, numFeatures = X.shape
-        bestGain = -np.inf
+        bestInfoGain = -np.inf
         bestSplit = None
 
-        for feature in range(numFeatures):
-            #Sort values for this feature
-            sortedIndices = np.argsort(X[:, feature])
-            xSorted = X[sortedIndices]
-            ySorted = y[sortedIndices]
+        if self.numJobs > 1:
+            results = []
+            with Pool(self.numJobs) as pool:
+                for feature in range(numFeatures):
+                    result = pool.apply_async(self._evaluateFeature,(feature, X, y, self.minSamplesLeaf))
+                    results.append(result)
 
-            #Get all unique values for current feature
-            values = xSorted[:, feature]
-            uniqueValues = np.unique(values)
+                splits = [result.get() for result in results]
+        
+        else:
+            splits = [self._evaluateFeature(feature, X, y, self.minSamplesLeaf) for feature in range(numFeatures)]
 
-            #If only one value -> No split possible -> Continue
-            if len(uniqueValues) == 1:
-                continue
-            
-            #Candidate thresholds = Midpoints between consecutive unique values
-            thresholds = (uniqueValues[:-1] + uniqueValues[1:])/2
-
-            for threshold in thresholds:
-                #Split data indices based on current feature
-                leftIndex = X[:, feature] <= threshold
-                rightIndex = ~leftIndex
-
-                #Skip if split leads to too few samples per leaf
-                if np.sum(leftIndex) < self.minSamplesLeaf or np.sum(rightIndex) < self.minSamplesLeaf:
-                    continue
-                
-                gain = self._infoGain(y, y[leftIndex], y[rightIndex])
-
-                #If feature + threshold lead to higher info gain -> Update
-                if gain > bestGain:
-                    bestGain = gain
-                    bestSplit = (feature, threshold, leftIndex, rightIndex)
+        
+        for feature, threshold, leftIndex, rightIndex, infoGain in splits:
+            if infoGain > bestInfoGain:
+                bestInfoGain = infoGain
+                bestSplit = (feature, threshold, leftIndex, rightIndex)
 
         return bestSplit
 
+
+    def _evaluateFeature(self, feature, X, y, minSamplesLeaf):
+        """Evaluate a single feature for splitting."""
+
+        #Get unique feature values
+        uniqueVals = np.unique(X[:, feature])
+
+        if len(uniqueVals) == 1:
+            return (feature, None, None, None, -np.inf)
+    
+        #Thresholds to test = Midpoint for all consecutive unique feature values
+        thresholds = (uniqueVals[:-1] + uniqueVals[1:])/2
+
+        #Initialize variables to track best threshold
+        bestInfoGain = -np.inf
+        bestSplit = (feature, None, None, None, -np.inf)
+
+        #Test all threhsholds
+        for threshold in thresholds:
+            leftIndex = X[:, feature] <= threshold
+            rightIndex = ~leftIndex
+
+            #Check if children have >minSample
+            numLeft = np.sum(leftIndex)
+            numRight = np.sum(rightIndex)
+
+            if numLeft < minSamplesLeaf or numRight < minSamplesLeaf:
+                continue
+
+            #Compute infoGain for split    
+            infoGain = self._infoGain(y, y[leftIndex], y[rightIndex])
+
+            if infoGain > bestInfoGain:
+                bestInfoGain = infoGain
+                bestSplit = (feature, threshold, leftIndex, rightIndex, infoGain)
+
+        return bestSplit
 
     def _impurity(self, y):
         """Compute impurity based on criterion."""
@@ -190,37 +215,24 @@ class DecisionTree:
 
 def entropy(labels):
     """Calculate conditional entropy"""
-    length = len(labels)
-    entropy = 0.0
-   
-    #Make a dict of the label counts of the data at the current node
-    labelCounts = Counter(labels)
+    unique, labelCounts = np.unique(labels, return_counts=True)
+    labelProbs = labelCounts/len(labels)
 
     #Entropy = -Summation of labelProbs*log_2(labelProbs)
-    for count in labelCounts.values():
-        labelProb = count/length
-        if labelProb > 0:
-            entropy -= labelProb*np.log2(labelProb)
-    return entropy
+    return -np.sum(labelProbs * np.log2(labelProbs + 1e-10)) #Prevent underflow
 
 
 def gini(labels):
     """Calculate Gini impurity"""
-    length = len(labels)
-    gini = 1.0
-
-    #Make a dict of the label counts of the data at the current node
-    labelCounts = Counter(labels)
+    unique, counts = np.unique(labels, return_counts=True)
+    labelProbs = counts/len(labels)
 
     #Gini = 1 - Summation of labelProbs**2
-    for count in labelCounts.values():
-        labelProb = count/length
-        gini -= labelProb**2
+    return 1.0 - np.sum(labelProbs**2)
 
-    return gini
 
 def trainAndTestTree(XTrain, XTest, yTrain, yTest, purityMeasure='entropy', 
-                        maxDepth=10, minSamplesSplit=5, minSamplesLeaf=2, 
+                        maxDepth=10, minSamplesSplit=5, minSamplesLeaf=2, numJobs=-1,
                         outputPath='trainedTree.pkl'):
     """Train a decision tree classifier and save it to disk."""
     
@@ -230,7 +242,8 @@ def trainAndTestTree(XTrain, XTest, yTrain, yTest, purityMeasure='entropy',
         purityMeasure=purityMeasure,
         maxDepth=maxDepth,
         minSamplesSplit=minSamplesSplit,
-        minSamplesLeaf=minSamplesLeaf
+        minSamplesLeaf=minSamplesLeaf,
+        numJobs=numJobs
     )
     
     #Train tree
