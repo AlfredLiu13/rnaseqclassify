@@ -39,7 +39,7 @@ class DecisionTree:
         numClasses = len(np.unique(y))
 
         #Stopping criteria
-        if (self.maxDepth is not None and depth >= self.max_depth) or numSamples < self.minSamplesSplit or numClasses == 1:
+        if (self.maxDepth is not None and depth >= self.maxDepth) or numSamples < self.minSamplesSplit or numClasses == 1:
             return self._createLeaf(y)
         
         #Try all splits
@@ -111,9 +111,9 @@ class DecisionTree:
 
     def _impurity(self, y):
         """Compute impurity based on criterion."""
-        if self.impurityMeasure == "entropy":
+        if self.purityMeasure == "entropy":
             return entropy(y)
-        elif self.impurityMeasure == "gini":
+        elif self.purityMeasure == "gini":
             return gini(y)
         
 
@@ -145,7 +145,7 @@ class DecisionTree:
 
         #Pick most common class via majority vote
         value = Counter(y).most_common(1)[0][0]
-        return Node(value=value, samples=len(y), impurity=0)
+        return Node(cellType=value, numSamples=len(y), impurity=0)
     
 
     def _traverseTree(self, x, node):
@@ -153,7 +153,7 @@ class DecisionTree:
 
         #Base case
         if node.isLeaf():
-            return node.value
+            return node.cellType
         
         #Recusively traverse tree
         if x[node.feature] <= node.threshold:
