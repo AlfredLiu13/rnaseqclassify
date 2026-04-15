@@ -43,7 +43,7 @@ def normalize(adata: AnnData) -> None:
 
 def reduce(adata: AnnData, num_genes: int) -> AnnData: 
 
-    """Selects highly variable genes and performs PCA"""
+    """selects highly variable genes and performs PCA"""
 
     print(f'Total Cells: {adata.n_obs}')
     print(f'Total Genes: {adata.n_vars}')
@@ -170,7 +170,7 @@ if __name__ == "__main__" :
     # Get the directory where this script is located
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    dir_path = os.path.join(script_dir, "droplet/Heart_and_Aorta-10X_P7_4")
+    dir_path = os.path.join(script_dir, "droplet/Thymus-10X_P7_11")
     annotation_fpath = os.path.join(script_dir, "droplet/annotations_droplet.csv")
     num_var_genes = 2000
 
@@ -180,14 +180,26 @@ if __name__ == "__main__" :
     adata = reduce(adata, num_var_genes)
     adata = annotate(adata, annotation_fpath, "heart")
 
-    # split into training and testing datasets
-    X_train, X_test, y_train, y_test = get_train_test(adata) 
-    
-    # run SVM and test accuracy 
-    svm = SVC(kernel='rbf')
-    svm.fit(X_train, y_train)
-    accuracy = svm.score(X_test, y_test)
+    adata_preprocess = adata.copy()
+    adata_preprocess.write_h5ad('heart_aorta_qc_normalized_pca.h5ad')
 
-    # plot 
-    save_path = os.path.join(script_dir, "svm_accuracy.png")
-    plot_svm_accuracy(svm, X_test, y_test, save_path=save_path)
+    # Export first 50 PCA coordinates for thymus dataset
+    pca_df = pd.DataFrame(
+        adata.obsm['X_pca'][:, :50],  # First 50 PCs
+        columns=[f'PC_{i+1}' for i in range(50)],
+        index=adata.obs_names
+    )
+    pca_df.to_csv('thymus_pca_coordinates.csv')
+
+
+    # # split into training and testing datasets
+    # X_train, X_test, y_train, y_test = get_train_test(adata) 
+    
+    # # run SVM and test accuracy 
+    # svm = SVC(kernel='rbf')
+    # svm.fit(X_train, y_train)
+    # accuracy = svm.score(X_test, y_test)
+
+    # # plot 
+    # save_path = os.path.join(script_dir, "svm_accuracy.png")
+    # plot_svm_accuracy(svm, X_test, y_test, save_path=save_path)
