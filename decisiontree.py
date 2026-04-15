@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 import os
 import time
+import pandas as pd
 from collections import Counter
 from multiprocessing import Pool, cpu_count
 
@@ -273,6 +274,25 @@ def loadTree(inputFilePath):
     
     print(f"Tree loaded from {inputFilePath}")
     return tree
+
+
+def dtAnnotateCells(tree, X, outputName='cellTypeAnnotations.csv'):
+    """Predict cell types for new single cells"""
+    
+    #Make predictions
+    predictedTypes = tree.predict(X)
+    
+    #Create pd DataFrame to store results after annotaiton
+    results = pd.DataFrame({
+        'cellID': range(len(X)),
+        'predictedCellType': predictedTypes
+    })
+    
+    #Save results to CSV
+    results.to_csv(outputName, index=False)
+    print(f"✓ {len(predictedTypes)} cells annotated and saved to {outputName}")
+    
+    return results
  
  
 if __name__ == "__main__":
