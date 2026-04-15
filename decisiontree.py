@@ -290,7 +290,7 @@ def dtAnnotateCells(tree, X, outputName='cellTypeAnnotations.csv'):
     
     #Save results to CSV
     results.to_csv(outputName, index=False)
-    print(f"✓ {len(predictedTypes)} cells annotated and saved to {outputName}")
+    print(f"{len(predictedTypes)} cells annotated and saved to {outputName}")
     
     return results
  
