@@ -191,6 +191,7 @@ if __name__ == "__main__" :
     )
     pca_df.to_csv('thymus_pca_coordinates.csv')
 
+    
 
     # # split into training and testing datasets
     # X_train, X_test, y_train, y_test = get_train_test(adata) 
